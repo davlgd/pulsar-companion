@@ -199,13 +199,6 @@ export class ArgumentParser {
   }
 
   /**
-   * Throws an error when trying to get topic name
-   */
-  getTopicName() {
-    throw new Error('Use PulsarManager.getTopicName() instead');
-  }
-
-  /**
    * Returns the number of threads
    * @returns {number} The number of IO threads
    */

@@ -7,7 +7,6 @@ import Pulsar from 'pulsar-client';
  * @property {object} config - The configuration object
  * @property {ArgumentParser} argParser - The argument parser instance
  * @property {Consumer|Reader} consumer - The consumer or reader instance
- * @property {number} messagesToRead - The number of messages to read
  */
 export class PulsarConsumer {
   /**
@@ -21,7 +20,6 @@ export class PulsarConsumer {
     this.client = client;
     this.config = config;
     this.consumer = null;
-    this.messagesToRead = null;
   }
 
   /**

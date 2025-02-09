@@ -15,12 +15,10 @@ export const CONFIG = {
     timeouts: {
       ackMessage: 10000,
       operation: 30,
-      readMessage: 30000,
       sendMessage: 30000
     }
   },
   reader: {
-    maxMessages: 100,
     queueSize: 1000
   },
   stress: {
