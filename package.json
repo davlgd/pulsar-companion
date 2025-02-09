@@ -1,6 +1,6 @@
 {
   "name": "pulsar-companion",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "A companion CLI tool for Apache Pulsar",
   "bin": {

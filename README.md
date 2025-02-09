@@ -28,8 +28,11 @@ npx pulsar-companion --version
 
 ## Stress Test
 
+To make some load tests, once this repository is cloned, you can run the following commands:
+
 ```bash
-npx pulsar-companion-stress --help
+npx pulsar-companion-stress
+npx pulsar-companion-stress --count 1000 --delay 50 --topic "myTopic"
 ```
 
 ## Configuration

@@ -23,6 +23,10 @@ export const CONFIG = {
     maxMessages: 100,
     queueSize: 1000
   },
+  stress: {
+    defaultCount: 100,
+    defaultDelay: 10
+  },
   help: {
     main: `
 Pulsar Companion - A companion CLI tool for Apache Pulsar
