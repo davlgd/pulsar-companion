@@ -8,6 +8,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
  * @class
  * @property {string} configPath - The path to the configuration file
  * @property {string} configDir - The path to the configuration directory
+ * @property {object|null} userConfig - The cached user configuration
  * @exports ConfigManager
  */
 export class ConfigManager {
@@ -18,6 +19,7 @@ export class ConfigManager {
     const configDir = join(homedir(), '.config', 'pulsar-companion');
     this.configPath = join(configDir, 'config.json');
     this.configDir = configDir;
+    this.userConfig = null;
   }
 
   /**
@@ -25,6 +27,10 @@ export class ConfigManager {
    * @returns {Promise<object>} The configuration object
    */
   async loadUserConfig() {
+    if (this.userConfig) {
+      return this.userConfig;
+    }
+
     try {
       const configContent = await readFile(this.configPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -46,6 +52,7 @@ export class ConfigManager {
         config.namespace = `persistent://${config.namespace}`;
       }
 
+      this.userConfig = config;
       return config;
     } catch (err) {
       if (err.code === 'ENOENT') {
@@ -103,6 +110,7 @@ export class ConfigManager {
         config.namespace = `persistent://${config.namespace}`;
       }
 
+      this.userConfig = config;
       return config;
     } catch (err) {
       console.error('Error saving configuration:', err);
