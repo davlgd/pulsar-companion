@@ -24,10 +24,10 @@ async function main() {
       await pulsarManager.receiveMessages();
     }
   }
-  // If an error occurs, log it and exit the process after some cleaning
+  // If an error occurs, log it and let the finally block clean up before exit
   catch (err) {
     console.error("[Error]", err.message);
-    process.exit(1);
+    process.exitCode = 1;
   }
   finally {
     await pulsarManager.cleanup();
