@@ -1,7 +1,7 @@
-import { join } from 'path';
-import { homedir } from 'os';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { input, password } from '@inquirer/prompts';
-import { readFile, writeFile, mkdir, chmod } from 'fs/promises';
+import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 
 /**
  * Manages the user configuration
