@@ -156,11 +156,6 @@ export class ArgumentParser {
       throw new Error(`Invalid compression type: ${compression}\nValid types: ${CONFIG.validCompressionTypes.join(', ')}`);
     }
 
-    const readPosition = this.getValue('topic');
-    if (readPosition && !CONFIG.validReadPositions.includes(readPosition)) {
-      throw new Error(`Invalid read position: ${readPosition}\nValid positions: ${CONFIG.validReadPositions.join(', ')}`);
-    }
-
     const since = this.getValue('since');
     if (since) {
       if (!['earliest', 'latest'].includes(since.toLowerCase())) {
