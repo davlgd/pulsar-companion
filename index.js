@@ -8,6 +8,15 @@ async function main() {
   const argParser = new ArgumentParser(process.argv.slice(2));
   const pulsarManager = new PulsarManager(CONFIG, argParser);
 
+  // Close Pulsar resources cleanly when interrupted; a second signal forces exit
+  const shutdown = async (signal) => {
+    console.log(`\nReceived ${signal}, shutting down...`);
+    await pulsarManager.cleanup();
+    process.exit(0);
+  };
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+
   try {
     await argParser.validateArgs();
     await pulsarManager.connect(argParser.getThreads());

@@ -7,6 +7,7 @@ import Pulsar from 'pulsar-client';
  * @property {object} config - The configuration object
  * @property {ArgumentParser} argParser - The argument parser instance
  * @property {Consumer|Reader} consumer - The consumer or reader instance
+ * @property {boolean} closed - Whether the consumer has been closed
  */
 export class PulsarConsumer {
   /**
@@ -20,6 +21,7 @@ export class PulsarConsumer {
     this.client = client;
     this.config = config;
     this.consumer = null;
+    this.closed = false;
   }
 
   /**
@@ -109,6 +111,8 @@ export class PulsarConsumer {
         await this.handleMessage(msg, isReader);
       } catch (err) {
         if (err.name === 'TimeoutError') continue;
+        // The consumer was closed (e.g. by a shutdown signal): stop cleanly
+        if (this.closed) return;
         throw err;
       }
     }
@@ -140,7 +144,8 @@ export class PulsarConsumer {
    * @returns {Promise<void>}
    */
   async close() {
-    if (this.consumer) {
+    if (this.consumer && !this.closed) {
+      this.closed = true;
       await this.consumer.close();
       console.log('Consumer closed');
     }
