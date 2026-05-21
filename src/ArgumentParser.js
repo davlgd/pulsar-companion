@@ -146,7 +146,10 @@ export class ArgumentParser {
   async validateArgs() {
     if (this.hasParam('help')) this.showHelp();
     if (this.hasParam('version')) await this.showVersion();
-    if (this.parseError) throw new Error(this.parseError.message);
+    if (this.parseError) {
+      // parseArgs messages carry a verbose hint; keep only the first sentence
+      throw new Error(this.parseError.message.split('. ')[0]);
+    }
 
     const mode = MODES[this.mode];
 
