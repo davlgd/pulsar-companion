@@ -21,6 +21,11 @@ npx pulsar-companion --topic "myTopic" --type "Failover" -s "my_sub"
 npx pulsar-companion --topic "myTopic" --since "2024-01-20T10:00:00Z"
 npx pulsar-companion --topic "myTopic" --since "latest"
 
+# Positional arguments: topic, then subscription, then key (flags take precedence)
+npx pulsar-companion myTopic
+npx pulsar-companion myTopic my_sub
+npx pulsar-companion --send "Hello" myTopic
+
 # About Pulsar Companion
 npx pulsar-companion --help
 npx pulsar-companion --version
@@ -37,7 +42,7 @@ npx pulsar-companion-stress --count 1000 --delay 50 --topic "myTopic"
 
 ## Configuration
 
-Configuration is stored in `~/.pulsar-companion/config.json`. Delete this file to reset.
+Configuration is stored in `~/.config/pulsar-companion/config.json`. Delete this file to reset.
 
 ## Contributing
 

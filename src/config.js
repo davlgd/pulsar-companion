@@ -29,10 +29,13 @@ export const CONFIG = {
 Pulsar Companion - A companion CLI tool for Apache Pulsar
 
 Usage:
-  npx pulsar-companion [options]
+  npx pulsar-companion [topic] [subscription] [key] [options]
+
+Positional arguments are mapped to topic, subscription and key, in that
+order. Matching flags, when provided, take precedence.
 
 Common Options:
-  --topic <name>            Specify topic name (default: pulsar_companion_topic)
+  --topic <name>            Specify topic name (default: pulsar_companion)
   -h, --help                Show this help message
   -v, --version             Show version
 
@@ -60,17 +63,20 @@ Examples:
   npx pulsar-companion --topic "myTopic" --type "Failover" -s "my_sub"
   npx pulsar-companion --topic "myTopic" --since earliest
   npx pulsar-companion --topic "myTopic" --since "2024-01-20T10:00:00Z"
+
+  # Positional arguments (topic, subscription, key)
+  npx pulsar-companion myTopic my_sub
 `,
     stress: `
 Pulsar Companion Stress Test Tool
 
 Usage:
-  npx pulsar-companion-stress [options]
+  npx pulsar-companion-stress [topic] [options]
 
 Options:
-  --topic <name>      Specify topic name (default: testNode)
+  --topic <name>      Specify topic name (default: pulsar_companion)
   --count <number>    Number of messages to send (default: 100)
-  --delay <ms>        Delay between messages in ms (default: 100)
+  --delay <ms>        Delay between messages in ms (default: 10)
   -h, --help          Show this help message
   -v, --version       Show version
 
