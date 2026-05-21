@@ -1,11 +1,7 @@
 import { parseArgs } from 'node:util';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { CONFIG } from './config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Option definitions consumed by node:util.parseArgs
@@ -118,7 +114,7 @@ export class ArgumentParser {
   async showVersion() {
     try {
       const packageJson = JSON.parse(
-        await readFile(join(dirname(__dirname), 'package.json'), 'utf8')
+        await readFile(join(dirname(import.meta.dirname), 'package.json'), 'utf8')
       );
       console.log(`${packageJson.name} v${packageJson.version}`);
     } catch (err) {
