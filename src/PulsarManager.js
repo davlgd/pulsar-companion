@@ -117,15 +117,19 @@ export class PulsarManager {
    */
   async cleanup() {
     this.cleanupPromise ??= (async () => {
-      if (this.producer) {
-        await this.producer.close();
-      }
-      if (this.consumer) {
-        await this.consumer.close();
-      }
-      if (this.client) {
-        await this.client.close();
-        console.log('Client closed');
+      try {
+        if (this.producer) {
+          await this.producer.close();
+        }
+        if (this.consumer) {
+          await this.consumer.close();
+        }
+        if (this.client) {
+          await this.client.close();
+          console.log('Client closed');
+        }
+      } catch (err) {
+        console.error('[Cleanup]', err.message);
       }
     })();
     return this.cleanupPromise;
