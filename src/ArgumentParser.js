@@ -18,6 +18,10 @@ const MODES = {
   READER: {
     required: ['since'],
     optional: ['topic']
+  },
+  STRESS: {
+    required: [],
+    optional: ['compression', 'count', 'delay', 'topic']
   }
 };
 
@@ -41,6 +45,8 @@ export class ArgumentParser {
     this.isStressTest = isStressTest;
     this.params = {
       compression: Math.max(args.indexOf('--compression'), args.indexOf('-c')),
+      count: args.indexOf('--count'),
+      delay: args.indexOf('--delay'),
       help: Math.max(args.indexOf('--help'), args.indexOf('-h')),
       key: args.indexOf('--key'),
       send: args.indexOf('--send'),
@@ -60,6 +66,7 @@ export class ArgumentParser {
    * @returns {string} The determined mode
    */
   determineMode() {
+    if (this.isStressTest) return 'STRESS';
     if (this.hasParam('send')) return 'PRODUCER';
     if (this.hasParam('since')) return 'READER';
     return 'CONSUMER';
