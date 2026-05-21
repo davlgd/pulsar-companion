@@ -1,3 +1,12 @@
+import { CONFIG } from './config.js';
+
+/**
+ * Manages the Pulsar producer
+ * @class
+ * @property {Pulsar.Client} client - The Pulsar client instance
+ * @property {object} config - The configuration object
+ * @property {Producer} producer - The Pulsar producer instance
+ */
 export class PulsarProducer {
   /**
    * Creates an instance of PulsarProducer
