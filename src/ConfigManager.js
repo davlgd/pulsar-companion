@@ -23,6 +23,16 @@ export class ConfigManager {
   }
 
   /**
+   * Normalizes a namespace into a fully-qualified persistent topic prefix
+   * @param {string} namespace - The raw namespace (e.g., tenant/namespace)
+   * @returns {string} The normalized namespace (e.g., persistent://tenant/namespace/)
+   */
+  normalizeNamespace(namespace) {
+    const withSlash = namespace.endsWith('/') ? namespace : `${namespace}/`;
+    return withSlash.startsWith('persistent://') ? withSlash : `persistent://${withSlash}`;
+  }
+
+  /**
    * Loads the user configuration from file
    * @returns {Promise<object>} The configuration object
    */
@@ -45,12 +55,7 @@ export class ConfigManager {
         throw new Error('Missing namespace in config file');
       }
 
-      if (!config.namespace.endsWith('/')) {
-        config.namespace += '/';
-      }
-      if (!config.namespace.startsWith('persistent://')) {
-        config.namespace = `persistent://${config.namespace}`;
-      }
+      config.namespace = this.normalizeNamespace(config.namespace);
 
       this.userConfig = config;
       return config;
@@ -102,13 +107,7 @@ export class ConfigManager {
       await writeFile(this.configPath, JSON.stringify(config, null, 2));
       console.log(`Configuration saved to ${this.configPath}`);
 
-      if (!config.namespace.endsWith('/')) {
-        config.namespace += '/';
-      }
-
-      if (!config.namespace.startsWith('persistent://')) {
-        config.namespace = `persistent://${config.namespace}`;
-      }
+      config.namespace = this.normalizeNamespace(config.namespace);
 
       this.userConfig = config;
       return config;
