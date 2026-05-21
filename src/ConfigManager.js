@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { homedir } from 'os';
 import { input, password } from '@inquirer/prompts';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, chmod } from 'fs/promises';
 
 /**
  * Manages the user configuration
@@ -57,6 +57,10 @@ export class ConfigManager {
 
       config.namespace = this.normalizeNamespace(config.namespace);
 
+      // The file holds an auth token: keep it readable by its owner only,
+      // self-healing configs written by earlier versions.
+      await chmod(this.configPath, 0o600).catch(() => {});
+
       this.userConfig = config;
       return config;
     } catch (err) {
@@ -103,8 +107,8 @@ export class ConfigManager {
     const config = { namespace, serviceUrl, token };
 
     try {
-      await mkdir(this.configDir, { recursive: true });
-      await writeFile(this.configPath, JSON.stringify(config, null, 2));
+      await mkdir(this.configDir, { recursive: true, mode: 0o700 });
+      await writeFile(this.configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
       console.log(`Configuration saved to ${this.configPath}`);
 
       config.namespace = this.normalizeNamespace(config.namespace);
