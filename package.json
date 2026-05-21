@@ -1,12 +1,17 @@
 {
   "name": "pulsar-companion",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "A companion CLI tool for Apache Pulsar",
   "bin": {
     "pulsar-companion": "./index.js",
     "pulsar-companion-stress": "./stress-test.js"
   },
+  "files": [
+    "index.js",
+    "stress-test.js",
+    "src/"
+  ],
   "scripts": {
     "start": "node index.js",
     "test": "node stress-test.js"
@@ -17,11 +22,14 @@
     "messaging",
     "apache-pulsar"
   ],
-  "author": "",
+  "author": "David Legrand",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "dependencies": {
-    "pulsar-client": "^1.12",
-    "@inquirer/prompts": "^7.3"
+    "pulsar-client": "^1.17",
+    "@inquirer/prompts": "^8.4"
   },
   "repository": {
     "type": "git",
