@@ -6,11 +6,22 @@ import { CONFIG } from './src/config.js';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Parses an integer argument, falling back to a default when absent or invalid
+ * @param {string|null} value - The raw argument value
+ * @param {number} fallback - The default to use when value is not a number
+ * @returns {number} The parsed integer or the fallback
+ */
+const toInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
 async function main() {
   const argParser = new ArgumentParser(process.argv.slice(2), true);
   const topic = argParser.getValue('topic') || CONFIG.defaultTopic;
-  const messageCount = parseInt(argParser.getValue('count')) || CONFIG.stress.defaultCount;
-  const delayMs = parseInt(argParser.getValue('delay')) || CONFIG.stress.defaultDelay;
+  const messageCount = toInt(argParser.getValue('count'), CONFIG.stress.defaultCount);
+  const delayMs = toInt(argParser.getValue('delay'), CONFIG.stress.defaultDelay);
 
   console.log(`Starting to send ${messageCount} messages to topic ${topic}`);
   console.log(`Delay between messages: ${delayMs}ms`);
