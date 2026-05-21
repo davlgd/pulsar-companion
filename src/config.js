@@ -1,7 +1,6 @@
 export const CONFIG = {
   defaultCompression: 'NONE',
   defaultKey: "default",
-  defaultReadPosition: 'latest',
   defaultThreads: 1,
   defaultTopic: 'pulsar_companion',
   defaultType: 'Exclusive',

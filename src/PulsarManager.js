@@ -79,15 +79,14 @@ export class PulsarManager {
   }
 
   /**
-   * Creates a consumer with the specified subscription type and read position
+   * Creates a consumer with the specified subscription type
    * @param {string|null} subscriptionType - The subscription type
-   * @param {string|number} readPosition - The read position or timestamp
    * @returns {Promise<void>}
    */
-  async createConsumer(subscriptionType, readPosition) {
+  async createConsumer(subscriptionType) {
     const fullTopicName = await this.getTopicName();
     this.consumer = new PulsarConsumer(this.client, this.config, this.argParser);
-    await this.consumer.create(fullTopicName, subscriptionType, readPosition);
+    await this.consumer.create(fullTopicName, subscriptionType);
   }
 
   /**

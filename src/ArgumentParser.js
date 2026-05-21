@@ -217,14 +217,6 @@ export class ArgumentParser {
   }
 
   /**
-   * Returns the read position
-   * @returns {string} The read position
-   */
-  getReadPosition() {
-    return this.getValue('topic') || CONFIG.defaultReadPosition;
-  }
-
-  /**
    * Returns the subscription name
    * @returns {string} The subscription name
    */
