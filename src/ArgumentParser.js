@@ -1,10 +1,29 @@
+import { parseArgs } from 'node:util';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { CONFIG } from './config.js';
-import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/**
+ * Option definitions consumed by node:util.parseArgs
+ */
+const OPTIONS = {
+  compression: { type: 'string', short: 'c' },
+  count: { type: 'string' },
+  delay: { type: 'string' },
+  help: { type: 'boolean', short: 'h' },
+  key: { type: 'string' },
+  send: { type: 'string' },
+  since: { type: 'string' },
+  sub: { type: 'string', short: 's' },
+  threads: { type: 'string', short: 't' },
+  topic: { type: 'string' },
+  type: { type: 'string' },
+  version: { type: 'boolean', short: 'v' }
+};
 
 const MODES = {
   PRODUCER: {
@@ -13,7 +32,7 @@ const MODES = {
   },
   CONSUMER: {
     required: [],
-    optional: ['subscription', 'topic', 'type']
+    optional: ['sub', 'topic', 'type']
   },
   READER: {
     required: ['since'],
@@ -28,9 +47,10 @@ const MODES = {
 /**
  * ArgumentParser class for parsing and validating command-line arguments
  * @class
- * @property {string[]} args - The command-line arguments
  * @property {boolean} isStressTest - Flag indicating stress test mode
- * @property {object} params - The parameter indices
+ * @property {object} values - The parsed option values
+ * @property {string[]} positionals - The parsed positional arguments
+ * @property {Error|null} parseError - A deferred argument-parsing error, if any
  * @property {string} mode - The execution mode
  * @exports ArgumentParser
 */
@@ -41,22 +61,25 @@ export class ArgumentParser {
    * @param {boolean} [isStressTest=false] - Flag indicating stress test mode
    */
   constructor(args, isStressTest = false) {
-    this.args = args;
     this.isStressTest = isStressTest;
-    this.params = {
-      compression: Math.max(args.indexOf('--compression'), args.indexOf('-c')),
-      count: args.indexOf('--count'),
-      delay: args.indexOf('--delay'),
-      help: Math.max(args.indexOf('--help'), args.indexOf('-h')),
-      key: args.indexOf('--key'),
-      send: args.indexOf('--send'),
-      since: args.indexOf('--since'),
-      subscription: Math.max(args.indexOf('--sub'), args.indexOf('-s')),
-      threads: Math.max(args.indexOf('--threads'), args.indexOf('-t')),
-      topic: args.indexOf('--topic'),
-      type: args.indexOf('--type'),
-      version: Math.max(args.indexOf('--version'), args.indexOf('-v'))
-    };
+
+    // parseArgs may throw on malformed input; defer that error to validateArgs
+    // so --help and --version still work and the message is reported cleanly.
+    try {
+      const { values, positionals } = parseArgs({
+        args,
+        options: OPTIONS,
+        strict: true,
+        allowPositionals: true
+      });
+      this.values = values;
+      this.positionals = positionals;
+      this.parseError = null;
+    } catch (err) {
+      this.values = {};
+      this.positionals = [];
+      this.parseError = err;
+    }
 
     this.mode = this.determineMode();
   }
@@ -102,8 +125,9 @@ export class ArgumentParser {
    * @returns {string|null} The value or null if not present
    */
   getValue(param) {
-    // If the parameter is not present, return null, otherwise return the value after the parameter
-    return this.params[param] !== -1 ? this.args[this.params[param] + 1]?.trim() : null;
+    const value = this.values[param];
+    if (value === undefined) return null;
+    return typeof value === 'string' ? value.trim() : value;
   }
 
   /**
@@ -112,8 +136,7 @@ export class ArgumentParser {
    * @returns {boolean} True if present, false otherwise
    */
   hasParam(param) {
-    // If the parameter is present, return true, otherwise return false
-    return this.params[param] !== -1;
+    return this.values[param] !== undefined;
   }
 
   /**
@@ -123,6 +146,7 @@ export class ArgumentParser {
   async validateArgs() {
     if (this.hasParam('help')) this.showHelp();
     if (this.hasParam('version')) await this.showVersion();
+    if (this.parseError) throw new Error(this.parseError.message);
 
     const mode = MODES[this.mode];
 
@@ -133,17 +157,11 @@ export class ArgumentParser {
     }
 
     const allowedParams = [...mode.required, ...mode.optional, 'help', 'version'];
-    for (const [param, index] of Object.entries(this.params)) {
-      if (index !== -1 && !allowedParams.includes(param)) {
+    for (const param of Object.keys(this.values)) {
+      if (!allowedParams.includes(param)) {
         throw new Error(`Parameter --${param} cannot be used in ${this.mode} mode`);
       }
     }
-
-    Object.entries(this.params).forEach(([param, index]) => {
-      if (index !== -1 && !this.args[index + 1] && !['help', 'version'].includes(param)) {
-        throw new Error(`Missing value for parameter --${param}`);
-      }
-    });
 
     await this.validateSpecificArgs();
   }
@@ -164,15 +182,12 @@ export class ArgumentParser {
     }
 
     const since = this.getValue('since');
-    if (since) {
-      if (!['earliest', 'latest'].includes(since.toLowerCase())) {
-        const timestamp = Date.parse(since);
-        if (isNaN(timestamp)) {
-          throw new Error(
-            'Invalid value for --since\n' +
-            'Valid values: earliest, latest, or ISO 8601 timestamp (e.g., "2024-01-20T10:00:00Z")'
-          );
-        }
+    if (since && !CONFIG.validReadPositions.includes(since.toLowerCase())) {
+      if (isNaN(Date.parse(since))) {
+        throw new Error(
+          'Invalid value for --since\n' +
+          'Valid values: earliest, latest, or ISO 8601 timestamp (e.g., "2024-01-20T10:00:00Z")'
+        );
       }
     }
 
@@ -192,12 +207,7 @@ export class ArgumentParser {
       return 'KeyShared';
     }
 
-    const requestedType = this.getValue('type');
-    if (requestedType && !CONFIG.validTypes.includes(requestedType)) {
-      throw new Error(`Invalid subscription type: ${requestedType}\nValid types: ${CONFIG.validTypes.join(', ')}`);
-    }
-
-    return requestedType || CONFIG.defaultType;
+    return this.getValue('type') || CONFIG.defaultType;
   }
 
   /**
@@ -205,7 +215,7 @@ export class ArgumentParser {
    * @returns {number} The number of IO threads
    */
   getThreads() {
-    return parseInt(this.getValue('threads')) || CONFIG.defaultThreads;
+    return parseInt(this.getValue('threads'), 10) || CONFIG.defaultThreads;
   }
 
   /**
@@ -221,7 +231,7 @@ export class ArgumentParser {
    * @returns {string} The subscription name
    */
   getSubscriptionName() {
-    return this.getValue('subscription') || CONFIG.subscription.defaultName;
+    return this.getValue('sub') || CONFIG.subscription.defaultName;
   }
 
   /**
@@ -231,7 +241,8 @@ export class ArgumentParser {
   getSinceValue() {
     const since = this.getValue('since');
     if (!since) return null;
-    return ['earliest', 'latest'].includes(since.toLowerCase()) ?
-      since.toLowerCase() : new Date(since).getTime();
+    return CONFIG.validReadPositions.includes(since.toLowerCase())
+      ? since.toLowerCase()
+      : new Date(since).getTime();
   }
 }
