@@ -37,7 +37,9 @@ async function main() {
     console.log('Test completed successfully!');
   } catch (err) {
     console.error("Error during test:", err.message);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await pulsarManager.cleanup();
   }
 }
 
