@@ -50,6 +50,7 @@ const MODES = {
  * @property {boolean} isStressTest - Flag indicating stress test mode
  * @property {object} values - The parsed option values
  * @property {string[]} positionals - The parsed positional arguments
+ * @property {object} positionalParams - Positional arguments mapped to topic, subscription and key
  * @property {Error|null} parseError - A deferred argument-parsing error, if any
  * @property {string} mode - The execution mode
  * @exports ArgumentParser
@@ -80,6 +81,13 @@ export class ArgumentParser {
       this.positionals = [];
       this.parseError = err;
     }
+
+    // Positional arguments map to topic, subscription and key, in that order
+    this.positionalParams = {
+      topic: this.positionals[0],
+      sub: this.positionals[1],
+      key: this.positionals[2]
+    };
 
     this.mode = this.determineMode();
   }
@@ -120,14 +128,16 @@ export class ArgumentParser {
   }
 
   /**
-   * Retrieves the value associated with a parameter
+   * Retrieves the value of a parameter, falling back to positional arguments
    * @param {string} param - The parameter name
    * @returns {string|null} The value or null if not present
    */
   getValue(param) {
     const value = this.values[param];
-    if (value === undefined) return null;
-    return typeof value === 'string' ? value.trim() : value;
+    if (value !== undefined) {
+      return typeof value === 'string' ? value.trim() : value;
+    }
+    return this.positionalParams[param] ?? null;
   }
 
   /**
@@ -149,6 +159,10 @@ export class ArgumentParser {
     if (this.parseError) {
       // parseArgs messages carry a verbose hint; keep only the first sentence
       throw new Error(this.parseError.message.split('. ')[0]);
+    }
+
+    if (this.positionals.length > 3) {
+      throw new Error('Too many positional arguments (expected: [topic] [subscription] [key])');
     }
 
     const mode = MODES[this.mode];
