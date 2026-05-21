@@ -19,17 +19,18 @@ const toInt = (value, fallback) => {
 
 async function main() {
   const argParser = new ArgumentParser(process.argv.slice(2), true);
-  const topic = argParser.getValue('topic') || CONFIG.defaultTopic;
-  const messageCount = toInt(argParser.getValue('count'), CONFIG.stress.defaultCount);
-  const delayMs = toInt(argParser.getValue('delay'), CONFIG.stress.defaultDelay);
-
-  console.log(`Starting to send ${messageCount} messages to topic ${topic}`);
-  console.log(`Delay between messages: ${delayMs}ms`);
-
   const pulsarManager = new PulsarManager(CONFIG, argParser);
 
   try {
     await argParser.validateArgs();
+
+    const topic = argParser.getValue('topic') || CONFIG.defaultTopic;
+    const messageCount = toInt(argParser.getValue('count'), CONFIG.stress.defaultCount);
+    const delayMs = toInt(argParser.getValue('delay'), CONFIG.stress.defaultDelay);
+
+    console.log(`Starting to send ${messageCount} messages to topic ${topic}`);
+    console.log(`Delay between messages: ${delayMs}ms`);
+
     await pulsarManager.connect();
     await pulsarManager.createProducer(argParser.getCompression());
 
