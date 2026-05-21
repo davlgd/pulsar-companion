@@ -202,11 +202,6 @@ export class ArgumentParser {
    * @returns {string} The subscription type
    */
   getSubscriptionType() {
-    if (this.hasParam('key')) {
-      console.log('Key specified, automatically switching to KeyShared mode');
-      return 'KeyShared';
-    }
-
     return this.getValue('type') || CONFIG.defaultType;
   }
 
