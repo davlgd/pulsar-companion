@@ -3,22 +3,26 @@ import { homedir } from 'node:os';
 import { input, password } from '@inquirer/prompts';
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 
+const REQUIRED_FIELDS = ['serviceUrl', 'token', 'namespace'];
+
 /**
  * Manages the user configuration
  * @class
  * @property {string} configPath - The path to the configuration file
  * @property {string} configDir - The path to the configuration directory
+ * @property {boolean} explicitPath - Whether the path came from --config
  * @property {object|null} userConfig - The cached user configuration
  * @exports ConfigManager
  */
 export class ConfigManager {
   /**
    * Creates an instance of ConfigManager
+   * @param {string|null} [configPath=null] - An explicit configuration file path
    */
-  constructor() {
-    const configDir = join(homedir(), '.config', 'pulsar-companion');
-    this.configPath = join(configDir, 'config.json');
-    this.configDir = configDir;
+  constructor(configPath = null) {
+    this.explicitPath = Boolean(configPath);
+    this.configPath = configPath ?? join(homedir(), '.config', 'pulsar-companion', 'config.json');
+    this.configDir = join(this.configPath, '..');
     this.userConfig = null;
   }
 
@@ -33,7 +37,7 @@ export class ConfigManager {
   }
 
   /**
-   * Loads the user configuration from file
+   * Loads the user configuration from the environment or the config file
    * @returns {Promise<object>} The configuration object
    */
   async loadUserConfig() {
@@ -41,34 +45,52 @@ export class ConfigManager {
       return this.userConfig;
     }
 
+    let configContent;
     try {
-      const configContent = await readFile(this.configPath, 'utf8');
-      const config = JSON.parse(configContent);
-
-      if (!config.serviceUrl) {
-        throw new Error('Missing serviceUrl in config file');
-      }
-      if (!config.token) {
-        throw new Error('Missing token in config file');
-      }
-      if (!config.namespace) {
-        throw new Error('Missing namespace in config file');
-      }
-
-      config.namespace = this.normalizeNamespace(config.namespace);
-
-      // The file holds an auth token: keep it readable by its owner only,
-      // self-healing configs written by earlier versions.
-      await chmod(this.configPath, 0o600).catch(() => {});
-
-      this.userConfig = config;
-      return config;
+      configContent = await readFile(this.configPath, 'utf8');
     } catch (err) {
       if (err.code === 'ENOENT') {
+        // An explicitly requested file that does not exist is a mistake,
+        // not an invitation to start the setup prompts.
+        if (this.explicitPath) {
+          throw new Error(`Configuration file not found: ${this.configPath}`);
+        }
         return await this.createUserConfig();
       }
-      throw err;
+      throw new Error(`Cannot read ${this.configPath}: ${err.message}`);
     }
+
+    let config;
+    try {
+      config = JSON.parse(configContent);
+    } catch (err) {
+      throw new Error(
+        `${this.configPath} is not valid JSON: ${err.message}\n` +
+        'Fix it, or delete it to be prompted again'
+      );
+    }
+
+    for (const field of REQUIRED_FIELDS) {
+      if (!config[field]) {
+        throw new Error(`Missing ${field} in ${this.configPath}`);
+      }
+    }
+
+    // The file holds an auth token: keep it readable by its owner only,
+    // self-healing configs written by earlier versions.
+    await chmod(this.configPath, 0o600).catch(() => {});
+
+    return this.cache(config);
+  }
+
+  /**
+   * Normalizes and caches a configuration
+   * @param {object} config - The raw configuration
+   * @returns {object} The cached configuration
+   */
+  cache(config) {
+    this.userConfig = { ...config, namespace: this.normalizeNamespace(config.namespace) };
+    return this.userConfig;
   }
 
   /**
@@ -76,6 +98,15 @@ export class ConfigManager {
    * @returns {Promise<object>} The newly created configuration object
    */
   async createUserConfig() {
+    // Prompting only makes sense on a terminal: in a pipe or a CI job the
+    // prompt cannot be answered and would fail with a confusing message.
+    if (!process.stdin.isTTY) {
+      throw new Error(
+        `No configuration found at ${this.configPath} and no terminal to ask on\n` +
+        'Create the file, or pass --config <path>'
+      );
+    }
+
     console.log('No configuration file found. Please provide your Pulsar connection details:');
 
     const serviceUrl = await input({
@@ -89,10 +120,7 @@ export class ConfigManager {
 
     const token = await password({
       message: 'Enter your authentication token:',
-      validate: (value) => {
-        if (!value) return 'Token cannot be empty';
-        return true;
-      }
+      validate: (value) => value ? true : 'Token cannot be empty'
     });
 
     const namespace = await input({
@@ -106,18 +134,10 @@ export class ConfigManager {
 
     const config = { namespace, serviceUrl, token };
 
-    try {
-      await mkdir(this.configDir, { recursive: true, mode: 0o700 });
-      await writeFile(this.configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
-      console.log(`Configuration saved to ${this.configPath}`);
+    await mkdir(this.configDir, { recursive: true, mode: 0o700 });
+    await writeFile(this.configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+    console.log(`Configuration saved to ${this.configPath}`);
 
-      config.namespace = this.normalizeNamespace(config.namespace);
-
-      this.userConfig = config;
-      return config;
-    } catch (err) {
-      console.error('Error saving configuration:', err);
-      process.exit(1);
-    }
+    return this.cache(config);
   }
 }
