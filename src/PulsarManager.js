@@ -13,6 +13,7 @@ import { PulsarConsumer } from './PulsarConsumer.js';
  * @property {PulsarProducer} producer - The Pulsar producer instance
  * @property {PulsarConsumer} consumer - The Pulsar consumer instance
  * @property {ArgumentParser} argParser - The argument parser instance
+ * @property {Promise<void>|null} cleanupPromise - Memoized cleanup, so it runs only once
  * @exports PulsarManager
 */
 export class PulsarManager {
@@ -28,6 +29,7 @@ export class PulsarManager {
     this.producer = null;
     this.consumer = null;
     this.argParser = argParser;
+    this.cleanupPromise = null;
   }
 
   /**
@@ -108,19 +110,32 @@ export class PulsarManager {
   }
 
   /**
-   * Cleans up resources by closing the producer, consumer, and client
+   * Cleans up resources by closing the producer, consumer, and client.
+   * Memoized so concurrent callers (e.g. a signal handler and the finally
+   * block) share a single run instead of double-closing resources.
    * @returns {Promise<void>}
    */
   async cleanup() {
-    if (this.producer) {
-      await this.producer.close();
-    }
-    if (this.consumer) {
-      await this.consumer.close();
-    }
-    if (this.client) {
-      await this.client.close();
-      console.log('Client closed');
-    }
+    this.cleanupPromise ??= (async () => {
+      // Each resource is closed independently: a failing producer or consumer
+      // must not keep the client (and its IO threads) from being released.
+      for (const resource of [this.producer, this.consumer]) {
+        try {
+          await resource?.close();
+        } catch (err) {
+          console.error('[Cleanup]', err.message);
+        }
+      }
+
+      try {
+        if (this.client) {
+          await this.client.close();
+          console.log('Client closed');
+        }
+      } catch (err) {
+        console.error('[Cleanup]', err.message);
+      }
+    })();
+    return this.cleanupPromise;
   }
 }
