@@ -1,7 +1,6 @@
 export const CONFIG = {
   defaultCompression: 'NONE',
   defaultKey: "default",
-  defaultReadPosition: 'latest',
   defaultThreads: 1,
   defaultTopic: 'pulsar_companion',
   defaultType: 'Exclusive',
@@ -30,10 +29,15 @@ export const CONFIG = {
 Pulsar Companion - A companion CLI tool for Apache Pulsar
 
 Usage:
-  npx pulsar-companion [options]
+  npx pulsar-companion [topic] [subscription] [key] [options]
+
+Positional arguments are mapped to topic, subscription and key, in that
+order. Matching flags, when provided, take precedence. An earlier positional
+may be left empty to reach a later one, keeping its own default; the last one
+must carry a value unless its flag supplies it, except the key, which is data.
 
 Common Options:
-  --topic <name>            Specify topic name (default: pulsar_companion_topic)
+  --topic <name>            Specify topic name (default: pulsar_companion)
   -h, --help                Show this help message
   -v, --version             Show version
 
@@ -61,19 +65,24 @@ Examples:
   npx pulsar-companion --topic "myTopic" --type "Failover" -s "my_sub"
   npx pulsar-companion --topic "myTopic" --since earliest
   npx pulsar-companion --topic "myTopic" --since "2024-01-20T10:00:00Z"
+
+  # Positional arguments (topic, subscription, key)
+  npx pulsar-companion myTopic my_sub
 `,
     stress: `
 Pulsar Companion Stress Test Tool
 
 Usage:
-  npx pulsar-companion-stress [options]
+  npx pulsar-companion-stress [topic] [options]
 
 Options:
-  --topic <name>      Specify topic name (default: testNode)
-  --count <number>    Number of messages to send (default: 100)
-  --delay <ms>        Delay between messages in ms (default: 100)
-  -h, --help          Show this help message
-  -v, --version       Show version
+  --topic <name>            Specify topic name (default: pulsar_companion)
+  --count <number>          Number of messages to send (default: 100)
+  --delay <ms>              Delay between messages in ms (default: 10)
+  -c, --compression <type>  Compression type (default: NONE)
+                              Valid types: NONE, LZ4, ZLIB, ZSTD, SNAPPY
+  -h, --help                Show this help message
+  -v, --version             Show version
 
 Examples:
   npx pulsar-companion-stress --count 1000 --delay 50 --topic "myTopic"

@@ -8,7 +8,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
   const argParser = new ArgumentParser(process.argv.slice(2), true);
-  const topic = argParser.getValue('topic') || CONFIG.defaultTopic;
+  const topic = argParser.getSetting('topic') || CONFIG.defaultTopic;
   const messageCount = parseInt(argParser.getValue('count')) || CONFIG.stress.defaultCount;
   const delayMs = parseInt(argParser.getValue('delay')) || CONFIG.stress.defaultDelay;
 

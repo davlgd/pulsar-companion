@@ -13,14 +13,15 @@ async function main() {
     await pulsarManager.connect(argParser.getThreads());
 
     if (argParser.hasParam('since')) {
-      await pulsarManager.createConsumer(null, argParser.getSinceValue());
+      await pulsarManager.createConsumer(null);
       await pulsarManager.receiveMessages();
     } else if (argParser.hasParam('send')) {
       await pulsarManager.createProducer(argParser.getCompression());
-      await pulsarManager.sendMessage(argParser.getValue('send'), argParser.getValue('key') || CONFIG.defaultKey);
+      // ?? not ||: an explicitly empty key is a key, not a missing one
+      await pulsarManager.sendMessage(argParser.getValue('send'), argParser.getValue('key') ?? CONFIG.defaultKey);
       console.log('Message sent successfully');
     } else {
-      await pulsarManager.createConsumer(argParser.getSubscriptionType(), argParser.getReadPosition());
+      await pulsarManager.createConsumer(argParser.getSubscriptionType());
       await pulsarManager.receiveMessages();
     }
   }
