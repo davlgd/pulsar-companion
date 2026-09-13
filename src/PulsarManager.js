@@ -62,6 +62,10 @@ export class PulsarManager {
       serviceUrl: userConfig.serviceUrl,
       authentication: new Pulsar.AuthenticationToken({ token: userConfig.token }),
       operationTimeoutSeconds: this.config.pulsar.timeouts.operation,
+      // The C++ client defaults this to false, which accepts a valid
+      // certificate issued for any host: the token would then be sent to
+      // whoever intercepts the connection.
+      tlsValidateHostname: true,
       ioThreads
     };
 
