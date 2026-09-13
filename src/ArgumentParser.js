@@ -192,6 +192,8 @@ export class ArgumentParser {
       }
     }
 
+    this.warnIgnoredPositionals();
+
     // Reject an empty flag before anything reads configuration or connects: an
     // empty --config would otherwise look like no --config at all, and fall
     // back to the environment instead of failing.
@@ -219,6 +221,27 @@ export class ArgumentParser {
     const value = parseDecimal(raw);
     if (value === null || value < min || value > max) {
       throw new Error(`Invalid value for --${param}: ${JSON.stringify(raw)}\nExpected an integer between ${min} and ${max}`);
+    }
+  }
+
+  /**
+   * Warns about positional arguments the current mode ignores.
+   * A positional followed by another one is a placeholder for a later slot
+   * (e.g. the subscription slot when passing a key to a producer), so only
+   * the last one provided is reported.
+   * @returns {void}
+   */
+  warnIgnoredPositionals() {
+    const mode = MODES[this.mode];
+    const allowed = [...mode.required, ...mode.optional];
+    const slots = ['topic', 'sub', 'key'];
+
+    const last = this.positionals.length - 1;
+    if (last < 0) return;
+
+    const param = slots[last];
+    if (param && !allowed.includes(param)) {
+      console.warn(`[Warning] positional argument "${this.positionals[last]}" maps to --${param}, which ${this.mode} mode ignores`);
     }
   }
 
