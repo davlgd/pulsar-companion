@@ -1,10 +1,32 @@
+import { parseArgs } from 'node:util';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { CONFIG } from './config.js';
-import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+/**
+ * Option definitions consumed by node:util.parseArgs
+ */
+const OPTIONS = {
+  compression: { type: 'string', short: 'c' },
+  count: { type: 'string' },
+  delay: { type: 'string' },
+  help: { type: 'boolean', short: 'h' },
+  key: { type: 'string' },
+  send: { type: 'string' },
+  since: { type: 'string' },
+  sub: { type: 'string', short: 's' },
+  threads: { type: 'string', short: 't' },
+  topic: { type: 'string' },
+  type: { type: 'string' },
+  version: { type: 'boolean', short: 'v' }
+};
+
+// Options that name something are meaningless when empty. --send and --key
+// carry data instead, so an empty value there is legitimate and kept.
+const REQUIRE_VALUE = ['compression', 'since', 'sub', 'topic', 'type'];
+
+/** Positional arguments map to these, in order */
+const POSITIONAL_SLOTS = ['topic', 'sub', 'key'];
 
 const MODES = {
   PRODUCER: {
@@ -13,20 +35,38 @@ const MODES = {
   },
   CONSUMER: {
     required: [],
-    optional: ['subscription', 'topic', 'type']
+    optional: ['sub', 'topic', 'type']
   },
   READER: {
     required: ['since'],
     optional: ['topic']
+  },
+  STRESS: {
+    required: [],
+    optional: ['compression', 'count', 'delay', 'topic']
   }
 };
 
 /**
+ * Parses a plain decimal integer. Unlike parseInt it rejects trailing junk,
+ * exponents and hex, so validation and the getters never disagree.
+ * @param {string|null|undefined} raw - The raw argument value
+ * @returns {number|null} The integer, or null when the value is not one
+ */
+function parseDecimal(raw) {
+  if (typeof raw !== 'string' || !/^-?\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+/**
  * ArgumentParser class for parsing and validating command-line arguments
  * @class
- * @property {string[]} args - The command-line arguments
  * @property {boolean} isStressTest - Flag indicating stress test mode
- * @property {object} params - The parameter indices
+ * @property {object} values - The parsed option values
+ * @property {string[]} positionals - The parsed positional arguments
+ * @property {object} positionalParams - Positional arguments mapped to topic, subscription and key
+ * @property {Error|null} parseError - A deferred argument-parsing error, if any
  * @property {string} mode - The execution mode
  * @exports ArgumentParser
 */
@@ -37,20 +77,30 @@ export class ArgumentParser {
    * @param {boolean} [isStressTest=false] - Flag indicating stress test mode
    */
   constructor(args, isStressTest = false) {
-    this.args = args;
     this.isStressTest = isStressTest;
-    this.params = {
-      compression: Math.max(args.indexOf('--compression'), args.indexOf('-c')),
-      help: Math.max(args.indexOf('--help'), args.indexOf('-h')),
-      key: args.indexOf('--key'),
-      send: args.indexOf('--send'),
-      since: args.indexOf('--since'),
-      subscription: Math.max(args.indexOf('--sub'), args.indexOf('-s')),
-      threads: Math.max(args.indexOf('--threads'), args.indexOf('-t')),
-      topic: args.indexOf('--topic'),
-      type: args.indexOf('--type'),
-      version: Math.max(args.indexOf('--version'), args.indexOf('-v'))
-    };
+
+    // parseArgs may throw on malformed input; defer that error to validateArgs
+    // so --help and --version still work and the message is reported cleanly.
+    try {
+      const { values, positionals } = parseArgs({
+        args,
+        options: OPTIONS,
+        strict: true,
+        allowPositionals: true
+      });
+      this.values = values;
+      this.positionals = positionals;
+      this.parseError = null;
+    } catch (err) {
+      this.values = {};
+      this.positionals = [];
+      this.parseError = err;
+    }
+
+    // Positional arguments map to topic, subscription and key, in that order
+    this.positionalParams = Object.fromEntries(
+      POSITIONAL_SLOTS.map((slot, index) => [slot, this.positionals[index]])
+    );
 
     this.mode = this.determineMode();
   }
@@ -60,6 +110,7 @@ export class ArgumentParser {
    * @returns {string} The determined mode
    */
   determineMode() {
+    if (this.isStressTest) return 'STRESS';
     if (this.hasParam('send')) return 'PRODUCER';
     if (this.hasParam('since')) return 'READER';
     return 'CONSUMER';
@@ -80,7 +131,7 @@ export class ArgumentParser {
   async showVersion() {
     try {
       const packageJson = JSON.parse(
-        await readFile(join(dirname(__dirname), 'package.json'), 'utf8')
+        await readFile(join(dirname(import.meta.dirname), 'package.json'), 'utf8')
       );
       console.log(`${packageJson.name} v${packageJson.version}`);
     } catch (err) {
@@ -90,13 +141,30 @@ export class ArgumentParser {
   }
 
   /**
-   * Retrieves the value associated with a parameter
+   * Retrieves the value of a parameter exactly as given, falling back to
+   * positional arguments. Message payloads and keys go through here, so
+   * nothing may be altered: use getSetting() for names and settings.
    * @param {string} param - The parameter name
    * @returns {string|null} The value or null if not present
    */
   getValue(param) {
-    // If the parameter is not present, return null, otherwise return the value after the parameter
-    return this.params[param] !== -1 ? this.args[this.params[param] + 1]?.trim() : null;
+    const value = this.values[param];
+    if (value !== undefined) {
+      return value;
+    }
+    return this.positionalParams[param] ?? null;
+  }
+
+  /**
+   * Retrieves a setting, trimming surrounding whitespace. Flags and
+   * positionals are treated identically, so `--key " k "` and a positional
+   * " k " cannot disagree.
+   * @param {string} param - The parameter name
+   * @returns {string|null} The trimmed value or null if not present
+   */
+  getSetting(param) {
+    const value = this.getValue(param);
+    return typeof value === 'string' ? value.trim() : value;
   }
 
   /**
@@ -105,8 +173,7 @@ export class ArgumentParser {
    * @returns {boolean} True if present, false otherwise
    */
   hasParam(param) {
-    // If the parameter is present, return true, otherwise return false
-    return this.params[param] !== -1;
+    return this.values[param] !== undefined;
   }
 
   /**
@@ -116,6 +183,14 @@ export class ArgumentParser {
   async validateArgs() {
     if (this.hasParam('help')) this.showHelp();
     if (this.hasParam('version')) await this.showVersion();
+    if (this.parseError) {
+      // parseArgs messages carry a verbose hint; keep only the first sentence
+      throw new Error(this.parseError.message.split('. ')[0]);
+    }
+
+    if (this.positionals.length > 3) {
+      throw new Error('Too many positional arguments (expected: [topic] [subscription] [key])');
+    }
 
     const mode = MODES[this.mode];
 
@@ -126,19 +201,73 @@ export class ArgumentParser {
     }
 
     const allowedParams = [...mode.required, ...mode.optional, 'help', 'version'];
-    for (const [param, index] of Object.entries(this.params)) {
-      if (index !== -1 && !allowedParams.includes(param)) {
+    for (const param of Object.keys(this.values)) {
+      if (!allowedParams.includes(param)) {
         throw new Error(`Parameter --${param} cannot be used in ${this.mode} mode`);
       }
     }
 
-    Object.entries(this.params).forEach(([param, index]) => {
-      if (index !== -1 && !this.args[index + 1] && !['help', 'version'].includes(param)) {
-        throw new Error(`Missing value for parameter --${param}`);
+    this.warnIgnoredPositionals();
+
+    // The last positional carries a value, not a placeholder: an empty one
+    // there would fall back to a default while the matching flag is refused,
+    // and the two are documented as equivalent. Earlier slots may be empty to
+    // skip ahead to a later one, and the key slot carries data, not a name.
+    // A slot supplied by its flag is exempt: the flag takes precedence, so the
+    // positional is never read, and the flag's own rule above governs it.
+    const lastSlot = POSITIONAL_SLOTS[this.positionals.length - 1];
+    if (REQUIRE_VALUE.includes(lastSlot)
+        && this.values[lastSlot] === undefined
+        && this.positionals.at(-1).trim() === '') {
+      throw new Error(`Positional ${lastSlot} needs a value, or use --${lastSlot}`);
+    }
+
+    // Reject an empty flag before anything reads configuration or connects.
+    for (const param of REQUIRE_VALUE) {
+      const value = this.values[param];
+      if (value !== undefined && value.trim() === '') {
+        throw new Error(`Option --${param} needs a value`);
       }
-    });
+    }
 
     await this.validateSpecificArgs();
+  }
+
+  /**
+   * Validates an optional argument as a bounded integer
+   * @param {string} param - The parameter name
+   * @param {number} min - The lowest accepted value
+   * @param {number} [max=2147483647] - The highest accepted value (int32)
+   * @returns {void}
+   */
+  validateInteger(param, min, max = 2147483647) {
+    const raw = this.getSetting(param);
+    if (raw === null || raw === undefined) return;
+
+    const value = parseDecimal(raw);
+    if (value === null || value < min || value > max) {
+      throw new Error(`Invalid value for --${param}: ${JSON.stringify(raw)}\nExpected an integer between ${min} and ${max}`);
+    }
+  }
+
+  /**
+   * Warns about positional arguments the current mode ignores.
+   * A positional followed by another one is a placeholder for a later slot
+   * (e.g. the subscription slot when passing a key to a producer), so only
+   * the last one provided is reported.
+   * @returns {void}
+   */
+  warnIgnoredPositionals() {
+    const mode = MODES[this.mode];
+    const allowed = [...mode.required, ...mode.optional];
+
+    const last = this.positionals.length - 1;
+    if (last < 0) return;
+
+    const param = POSITIONAL_SLOTS[last];
+    if (param && !allowed.includes(param)) {
+      console.warn(`[Warning] positional argument "${this.positionals[last]}" maps to --${param}, which ${this.mode} mode ignores`);
+    }
   }
 
   /**
@@ -146,35 +275,29 @@ export class ArgumentParser {
    * @returns {Promise<void>}
    */
   async validateSpecificArgs() {
-    const threads = this.getThreads();
-    if (threads && (isNaN(threads) || threads < 1)) {
-      throw new Error('Number of threads must be a positive integer');
-    }
+    // Validate the raw values: the getters normalise them, which would hide
+    // both a non-numeric argument and an explicit 0.
+    this.validateInteger('threads', 1);
+    this.validateInteger('count', 0);
+    // A larger delay overflows Node's timer and would be clamped to 1ms.
+    this.validateInteger('delay', 0);
 
     const compression = this.getCompression();
     if (compression && !CONFIG.validCompressionTypes.includes(compression.toUpperCase())) {
       throw new Error(`Invalid compression type: ${compression}\nValid types: ${CONFIG.validCompressionTypes.join(', ')}`);
     }
 
-    const readPosition = this.getValue('topic');
-    if (readPosition && !CONFIG.validReadPositions.includes(readPosition)) {
-      throw new Error(`Invalid read position: ${readPosition}\nValid positions: ${CONFIG.validReadPositions.join(', ')}`);
-    }
-
-    const since = this.getValue('since');
-    if (since) {
-      if (!['earliest', 'latest'].includes(since.toLowerCase())) {
-        const timestamp = Date.parse(since);
-        if (isNaN(timestamp)) {
-          throw new Error(
-            'Invalid value for --since\n' +
-            'Valid values: earliest, latest, or ISO 8601 timestamp (e.g., "2024-01-20T10:00:00Z")'
-          );
-        }
+    const since = this.getSetting('since');
+    if (since && !CONFIG.validReadPositions.includes(since.toLowerCase())) {
+      if (isNaN(Date.parse(since))) {
+        throw new Error(
+          'Invalid value for --since\n' +
+          'Valid values: earliest, latest, or ISO 8601 timestamp (e.g., "2024-01-20T10:00:00Z")'
+        );
       }
     }
 
-    const requestedType = this.getValue('type');
+    const requestedType = this.getSetting('type');
     if (requestedType && !CONFIG.validTypes.includes(requestedType)) {
       throw new Error(`Invalid subscription type: ${requestedType}\nValid types: ${CONFIG.validTypes.join(', ')}`);
     }
@@ -185,17 +308,7 @@ export class ArgumentParser {
    * @returns {string} The subscription type
    */
   getSubscriptionType() {
-    if (this.hasParam('key')) {
-      console.log('Key specified, automatically switching to KeyShared mode');
-      return 'KeyShared';
-    }
-
-    const requestedType = this.getValue('type');
-    if (requestedType && !CONFIG.validTypes.includes(requestedType)) {
-      throw new Error(`Invalid subscription type: ${requestedType}\nValid types: ${CONFIG.validTypes.join(', ')}`);
-    }
-
-    return requestedType || CONFIG.defaultType;
+    return this.getSetting('type') || CONFIG.defaultType;
   }
 
   /**
@@ -203,7 +316,7 @@ export class ArgumentParser {
    * @returns {number} The number of IO threads
    */
   getThreads() {
-    return parseInt(this.getValue('threads')) || CONFIG.defaultThreads;
+    return parseDecimal(this.getSetting('threads')) ?? CONFIG.defaultThreads;
   }
 
   /**
@@ -211,15 +324,7 @@ export class ArgumentParser {
    * @returns {string} The compression type
    */
   getCompression() {
-    return (this.getValue('compression') || CONFIG.defaultCompression).toUpperCase();
-  }
-
-  /**
-   * Returns the read position
-   * @returns {string} The read position
-   */
-  getReadPosition() {
-    return this.getValue('topic') || CONFIG.defaultReadPosition;
+    return (this.getSetting('compression') || CONFIG.defaultCompression).toUpperCase();
   }
 
   /**
@@ -227,7 +332,7 @@ export class ArgumentParser {
    * @returns {string} The subscription name
    */
   getSubscriptionName() {
-    return this.getValue('subscription') || CONFIG.subscription.defaultName;
+    return this.getSetting('sub') || CONFIG.subscription.defaultName;
   }
 
   /**
@@ -235,9 +340,10 @@ export class ArgumentParser {
    * @returns {string|number|null} The since value
    */
   getSinceValue() {
-    const since = this.getValue('since');
+    const since = this.getSetting('since');
     if (!since) return null;
-    return ['earliest', 'latest'].includes(since.toLowerCase()) ?
-      since.toLowerCase() : new Date(since).getTime();
+    return CONFIG.validReadPositions.includes(since.toLowerCase())
+      ? since.toLowerCase()
+      : new Date(since).getTime();
   }
 }

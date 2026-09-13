@@ -26,10 +26,9 @@ export class PulsarConsumer {
    * Creates a consumer or reader depending on the parameters
    * @param {string} topicName - The full topic name
    * @param {string|null} subscriptionType - The subscription type
-   * @param {string} [readPosition='latest'] - The read position
    * @returns {Promise<void>}
    */
-  async create(topicName, subscriptionType, readPosition = 'latest') {
+  async create(topicName, subscriptionType) {
     this.consumer = this.argParser.hasParam('since')
       ? await this.createReader(topicName, this.argParser.getSinceValue())
       : await this.createSubscriber(topicName, subscriptionType);
