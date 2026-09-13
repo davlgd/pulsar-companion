@@ -24,7 +24,7 @@ export class PulsarManager {
    */
   constructor(config, argParser) {
     this.config = config;
-    this.configManager = new ConfigManager();
+    this.configManager = new ConfigManager(argParser.getConfigPath());
     this.client = null;
     this.producer = null;
     this.consumer = null;

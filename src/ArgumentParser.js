@@ -8,6 +8,7 @@ import { CONFIG } from './config.js';
  */
 const OPTIONS = {
   compression: { type: 'string', short: 'c' },
+  config: { type: 'string' },
   count: { type: 'string' },
   delay: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
@@ -185,7 +186,7 @@ export class ArgumentParser {
       }
     }
 
-    const allowedParams = [...mode.required, ...mode.optional, 'help', 'version'];
+    const allowedParams = [...mode.required, ...mode.optional, 'config', 'help', 'version'];
     for (const param of Object.keys(this.values)) {
       if (!allowedParams.includes(param)) {
         throw new Error(`Parameter --${param} cannot be used in ${this.mode} mode`);
@@ -276,6 +277,14 @@ export class ArgumentParser {
     if (requestedType && !CONFIG.validTypes.includes(requestedType)) {
       throw new Error(`Invalid subscription type: ${requestedType}\nValid types: ${CONFIG.validTypes.join(', ')}`);
     }
+  }
+
+  /**
+   * Returns the explicit configuration file path, if any
+   * @returns {string|null} The path or null
+   */
+  getConfigPath() {
+    return this.getValue('config');
   }
 
   /**

@@ -3,6 +3,13 @@ import { homedir } from 'node:os';
 import { input, password } from '@inquirer/prompts';
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 
+/** Environment variables holding a complete connection, used as a whole */
+const ENV_VARS = {
+  serviceUrl: 'PULSAR_SERVICE_URL',
+  token: 'PULSAR_TOKEN',
+  namespace: 'PULSAR_NAMESPACE'
+};
+
 const REQUIRED_FIELDS = ['serviceUrl', 'token', 'namespace'];
 
 /**
@@ -37,12 +44,47 @@ export class ConfigManager {
   }
 
   /**
+   * Reads a connection from the environment.
+   * All three variables are required together: mixing them with a file could
+   * pair one cluster's URL with another cluster's token.
+   * @returns {object|null} The configuration, or null when none is set
+   */
+  fromEnvironment() {
+    const present = Object.entries(ENV_VARS).filter(([, name]) => process.env[name]);
+    if (present.length === 0) return null;
+
+    if (present.length !== REQUIRED_FIELDS.length) {
+      const missing = Object.entries(ENV_VARS)
+        .filter(([, name]) => !process.env[name])
+        .map(([, name]) => name);
+      throw new Error(
+        `Incomplete configuration in the environment: ${missing.join(', ')} not set\n` +
+        `Set ${Object.values(ENV_VARS).join(', ')} together, or unset them all to use a configuration file`
+      );
+    }
+
+    return Object.fromEntries(
+      Object.entries(ENV_VARS).map(([field, name]) => [field, process.env[name]])
+    );
+  }
+
+  /**
    * Loads the user configuration from the environment or the config file
    * @returns {Promise<object>} The configuration object
    */
   async loadUserConfig() {
     if (this.userConfig) {
       return this.userConfig;
+    }
+
+    // Precedence is --config, then the environment, then the default file.
+    // An explicitly chosen file is never overridden, and its presence also
+    // means an incomplete environment is none of our business.
+    if (!this.explicitPath) {
+      const fromEnv = this.fromEnvironment();
+      if (fromEnv) {
+        return this.cache(fromEnv);
+      }
     }
 
     let configContent;
@@ -103,7 +145,7 @@ export class ConfigManager {
     if (!process.stdin.isTTY) {
       throw new Error(
         `No configuration found at ${this.configPath} and no terminal to ask on\n` +
-        'Create the file, or pass --config <path>'
+        `Set ${Object.values(ENV_VARS).join(', ')}, or pass --config <path>`
       );
     }
 
