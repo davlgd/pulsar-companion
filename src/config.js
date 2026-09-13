@@ -7,7 +7,16 @@ export const CONFIG = {
   subscription: {
     defaultName: 'pulsar_companion_sub'
   },
-  validCompressionTypes: ['NONE', 'LZ4', 'ZLIB', 'ZSTD', 'SNAPPY'],
+  // Keys are what users type (matched case-insensitively); values are the
+  // exact strings pulsar-client expects. It matches them case-sensitively and
+  // silently falls back to no compression on anything else.
+  compressionTypes: {
+    NONE: 'None',
+    LZ4: 'LZ4',
+    ZLIB: 'Zlib',
+    ZSTD: 'ZSTD',
+    SNAPPY: 'SNAPPY'
+  },
   validReadPositions: ['earliest', 'latest'],
   validTypes: ['Exclusive', 'Failover', 'Shared', 'KeyShared'],
   pulsar: {
