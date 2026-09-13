@@ -21,6 +21,10 @@ const OPTIONS = {
   version: { type: 'boolean', short: 'v' }
 };
 
+// Options that name something are meaningless when empty. --send and --key
+// carry data instead, so an empty value there is legitimate and kept.
+const REQUIRE_VALUE = ['compression', 'config', 'since', 'sub', 'topic', 'type'];
+
 const MODES = {
   PRODUCER: {
     required: ['send'],
@@ -39,6 +43,18 @@ const MODES = {
     optional: ['compression', 'count', 'delay', 'topic']
   }
 };
+
+/**
+ * Parses a plain decimal integer. Unlike parseInt it rejects trailing junk,
+ * exponents and hex, so validation and the getters never disagree.
+ * @param {string|null|undefined} raw - The raw argument value
+ * @returns {number|null} The integer, or null when the value is not one
+ */
+function parseDecimal(raw) {
+  if (typeof raw !== 'string' || !/^-?\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : null;
+}
 
 /**
  * ArgumentParser class for parsing and validating command-line arguments
@@ -176,7 +192,34 @@ export class ArgumentParser {
       }
     }
 
+    // Reject an empty flag before anything reads configuration or connects: an
+    // empty --config would otherwise look like no --config at all, and fall
+    // back to the environment instead of failing.
+    for (const param of REQUIRE_VALUE) {
+      const value = this.values[param];
+      if (value !== undefined && value.trim() === '') {
+        throw new Error(`Option --${param} needs a value`);
+      }
+    }
+
     await this.validateSpecificArgs();
+  }
+
+  /**
+   * Validates an optional argument as a bounded integer
+   * @param {string} param - The parameter name
+   * @param {number} min - The lowest accepted value
+   * @param {number} [max=2147483647] - The highest accepted value (int32)
+   * @returns {void}
+   */
+  validateInteger(param, min, max = 2147483647) {
+    const raw = this.getValue(param);
+    if (raw === null || raw === undefined) return;
+
+    const value = parseDecimal(raw);
+    if (value === null || value < min || value > max) {
+      throw new Error(`Invalid value for --${param}: ${JSON.stringify(raw)}\nExpected an integer between ${min} and ${max}`);
+    }
   }
 
   /**
@@ -184,10 +227,12 @@ export class ArgumentParser {
    * @returns {Promise<void>}
    */
   async validateSpecificArgs() {
-    const threads = this.getThreads();
-    if (threads && (isNaN(threads) || threads < 1)) {
-      throw new Error('Number of threads must be a positive integer');
-    }
+    // Validate the raw values: the getters normalise them, which would hide
+    // both a non-numeric argument and an explicit 0.
+    this.validateInteger('threads', 1);
+    this.validateInteger('count', 0);
+    // A larger delay overflows Node's timer and would be clamped to 1ms.
+    this.validateInteger('delay', 0);
 
     const compression = this.getValue('compression');
     if (compression && !(compression.toUpperCase() in CONFIG.compressionTypes)) {
@@ -223,7 +268,7 @@ export class ArgumentParser {
    * @returns {number} The number of IO threads
    */
   getThreads() {
-    return parseInt(this.getValue('threads'), 10) || CONFIG.defaultThreads;
+    return parseDecimal(this.getValue('threads')) ?? CONFIG.defaultThreads;
   }
 
   /**

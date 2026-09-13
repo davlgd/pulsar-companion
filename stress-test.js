@@ -7,14 +7,15 @@ import { CONFIG } from './src/config.js';
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Parses an integer argument, falling back to a default when absent or invalid
- * @param {string|null} value - The raw argument value
- * @param {number} fallback - The default to use when value is not a number
- * @returns {number} The parsed integer or the fallback
+ * Reads an already-validated integer argument, or its default when absent
+ * @param {ArgumentParser} argParser - The argument parser instance
+ * @param {string} param - The parameter name
+ * @param {number} fallback - The default to use when the argument is absent
+ * @returns {number} The integer value
  */
-const toInt = (value, fallback) => {
-  const parsed = parseInt(value, 10);
-  return Number.isNaN(parsed) ? fallback : parsed;
+const intArg = (argParser, param, fallback) => {
+  const raw = argParser.getValue(param);
+  return raw === null || raw === undefined ? fallback : Number(raw);
 };
 
 async function main() {
@@ -25,8 +26,8 @@ async function main() {
     await argParser.validateArgs();
 
     const topic = argParser.getValue('topic') || CONFIG.defaultTopic;
-    const messageCount = toInt(argParser.getValue('count'), CONFIG.stress.defaultCount);
-    const delayMs = toInt(argParser.getValue('delay'), CONFIG.stress.defaultDelay);
+    const messageCount = intArg(argParser, 'count', CONFIG.stress.defaultCount);
+    const delayMs = intArg(argParser, 'delay', CONFIG.stress.defaultDelay);
 
     console.log(`Starting to send ${messageCount} messages to topic ${topic}`);
     console.log(`Delay between messages: ${delayMs}ms`);
