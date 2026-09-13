@@ -45,13 +45,13 @@ order. Matching flags, when provided, take precedence.
 
 Common Options:
   --topic <name>            Specify topic name (default: pulsar_companion)
+  -t, --threads <n>         Number of IO threads (default: 1)
   -h, --help                Show this help message
   -v, --version             Show version
 
 Producer Options:
   --send <message>          Send a message to the topic
   --key <key>               Set message key
-  -t, --threads <n>         Number of IO threads (default: 1)
   -c, --compression <type>  Compression type (default: NONE)
                               Valid types: NONE, LZ4, ZLIB, ZSTD, SNAPPY
 
@@ -86,6 +86,7 @@ Options:
   --topic <name>      Specify topic name (default: pulsar_companion)
   --count <number>    Number of messages to send (default: 100)
   --delay <ms>        Delay between messages in ms (default: 10)
+  -t, --threads <n>   Number of IO threads (default: 1)
   -h, --help          Show this help message
   -v, --version       Show version
 

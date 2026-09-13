@@ -43,7 +43,7 @@ async function main() {
     console.log(`Starting to send ${messageCount} messages to topic ${topic}`);
     console.log(`Delay between messages: ${delayMs}ms`);
 
-    await pulsarManager.connect();
+    await pulsarManager.connect(argParser.getThreads());
     await pulsarManager.createProducer(argParser.getCompression());
 
     for (let i = 1; i <= messageCount; i++) {
