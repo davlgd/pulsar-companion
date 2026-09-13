@@ -47,7 +47,7 @@ export class PulsarManager {
    */
   async getTopicName() {
     const namespace = await this.getNamespace();
-    const suffix = this.argParser.getValue('topic') || this.config.defaultTopic;
+    const suffix = this.argParser.getSetting('topic') || this.config.defaultTopic;
     return `${namespace}${suffix}`;
   }
 

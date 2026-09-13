@@ -14,7 +14,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  * @returns {number} The integer value
  */
 const intArg = (argParser, param, fallback) => {
-  const raw = argParser.getValue(param);
+  const raw = argParser.getSetting(param);
   return raw === null || raw === undefined ? fallback : Number(raw);
 };
 
@@ -36,7 +36,7 @@ async function main() {
   try {
     await argParser.validateArgs();
 
-    const topic = argParser.getValue('topic') || CONFIG.defaultTopic;
+    const topic = argParser.getSetting('topic') || CONFIG.defaultTopic;
     const messageCount = intArg(argParser, 'count', CONFIG.stress.defaultCount);
     const delayMs = intArg(argParser, 'delay', CONFIG.stress.defaultDelay);
 

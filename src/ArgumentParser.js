@@ -141,16 +141,30 @@ export class ArgumentParser {
   }
 
   /**
-   * Retrieves the value of a parameter, falling back to positional arguments
+   * Retrieves the value of a parameter exactly as given, falling back to
+   * positional arguments. Message payloads and keys go through here, so
+   * nothing may be altered: use getSetting() for names and settings.
    * @param {string} param - The parameter name
    * @returns {string|null} The value or null if not present
    */
   getValue(param) {
     const value = this.values[param];
     if (value !== undefined) {
-      return typeof value === 'string' ? value.trim() : value;
+      return value;
     }
     return this.positionalParams[param] ?? null;
+  }
+
+  /**
+   * Retrieves a setting, trimming surrounding whitespace. Flags and
+   * positionals are treated identically, so `--key " k "` and a positional
+   * " k " cannot disagree.
+   * @param {string} param - The parameter name
+   * @returns {string|null} The trimmed value or null if not present
+   */
+  getSetting(param) {
+    const value = this.getValue(param);
+    return typeof value === 'string' ? value.trim() : value;
   }
 
   /**
@@ -216,7 +230,7 @@ export class ArgumentParser {
    * @returns {void}
    */
   validateInteger(param, min, max = 2147483647) {
-    const raw = this.getValue(param);
+    const raw = this.getSetting(param);
     if (raw === null || raw === undefined) return;
 
     const value = parseDecimal(raw);
@@ -258,12 +272,12 @@ export class ArgumentParser {
     // A larger delay overflows Node's timer and would be clamped to 1ms.
     this.validateInteger('delay', 0);
 
-    const compression = this.getValue('compression');
+    const compression = this.getSetting('compression');
     if (compression && !(compression.toUpperCase() in CONFIG.compressionTypes)) {
       throw new Error(`Invalid compression type: ${compression}\nValid types: ${Object.keys(CONFIG.compressionTypes).join(', ')}`);
     }
 
-    const since = this.getValue('since');
+    const since = this.getSetting('since');
     if (since && !CONFIG.validReadPositions.includes(since.toLowerCase())) {
       if (isNaN(Date.parse(since))) {
         throw new Error(
@@ -273,7 +287,7 @@ export class ArgumentParser {
       }
     }
 
-    const requestedType = this.getValue('type');
+    const requestedType = this.getSetting('type');
     if (requestedType && !CONFIG.validTypes.includes(requestedType)) {
       throw new Error(`Invalid subscription type: ${requestedType}\nValid types: ${CONFIG.validTypes.join(', ')}`);
     }
@@ -284,7 +298,7 @@ export class ArgumentParser {
    * @returns {string|null} The path or null
    */
   getConfigPath() {
-    return this.getValue('config');
+    return this.getSetting('config');
   }
 
   /**
@@ -292,7 +306,7 @@ export class ArgumentParser {
    * @returns {string} The subscription type
    */
   getSubscriptionType() {
-    return this.getValue('type') || CONFIG.defaultType;
+    return this.getSetting('type') || CONFIG.defaultType;
   }
 
   /**
@@ -300,7 +314,7 @@ export class ArgumentParser {
    * @returns {number} The number of IO threads
    */
   getThreads() {
-    return parseDecimal(this.getValue('threads')) ?? CONFIG.defaultThreads;
+    return parseDecimal(this.getSetting('threads')) ?? CONFIG.defaultThreads;
   }
 
   /**
@@ -308,7 +322,7 @@ export class ArgumentParser {
    * @returns {string} The canonical compression type
    */
   getCompression() {
-    const requested = (this.getValue('compression') || CONFIG.defaultCompression).toUpperCase();
+    const requested = (this.getSetting('compression') || CONFIG.defaultCompression).toUpperCase();
     return CONFIG.compressionTypes[requested] ?? CONFIG.compressionTypes.NONE;
   }
 
@@ -317,7 +331,7 @@ export class ArgumentParser {
    * @returns {string} The subscription name
    */
   getSubscriptionName() {
-    return this.getValue('sub') || CONFIG.subscription.defaultName;
+    return this.getSetting('sub') || CONFIG.subscription.defaultName;
   }
 
   /**
@@ -325,7 +339,7 @@ export class ArgumentParser {
    * @returns {string|number|null} The since value
    */
   getSinceValue() {
-    const since = this.getValue('since');
+    const since = this.getSetting('since');
     if (!since) return null;
     return CONFIG.validReadPositions.includes(since.toLowerCase())
       ? since.toLowerCase()
