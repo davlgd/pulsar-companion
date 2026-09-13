@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { input, password } from '@inquirer/prompts';
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
@@ -13,21 +13,17 @@ const ENV_VARS = {
 const REQUIRED_FIELDS = ['serviceUrl', 'token', 'namespace'];
 
 /**
- * Describes where a file stops being valid JSON, without quoting any of it
+ * Describes where a file stops being valid JSON, without quoting any of it.
+ * The parser's message is only mined for its offset, never reused: it quotes
+ * the surrounding text, which here could be the token itself.
  * @param {string} contents - The file contents
- * @returns {string} A position suffix, or an empty string
+ * @param {Error} err - The error JSON.parse threw
+ * @returns {string} A line suffix, or an empty string
  */
-function describePosition(contents) {
-  try {
-    JSON.parse(contents);
-  } catch (err) {
-    const position = Number(/position (\d+)/.exec(err.message)?.[1]);
-    if (Number.isInteger(position)) {
-      const line = contents.slice(0, position).split('\n').length;
-      return ` (line ${line})`;
-    }
-  }
-  return '';
+function describePosition(contents, err) {
+  const position = Number(/position (\d+)/.exec(err.message)?.[1]);
+  if (!Number.isInteger(position)) return '';
+  return ` (line ${contents.slice(0, position).split('\n').length})`;
 }
 
 /**
@@ -47,7 +43,7 @@ export class ConfigManager {
   constructor(configPath = null) {
     this.explicitPath = Boolean(configPath);
     this.configPath = configPath ?? join(homedir(), '.config', 'pulsar-companion', 'config.json');
-    this.configDir = join(this.configPath, '..');
+    this.configDir = dirname(this.configPath);
     this.userConfig = null;
   }
 
@@ -101,7 +97,7 @@ export class ConfigManager {
     if (!this.explicitPath) {
       const fromEnv = this.fromEnvironment();
       if (fromEnv) {
-        return this.cache(fromEnv);
+        return this.cache(fromEnv, 'the environment');
       }
     }
 
@@ -123,20 +119,14 @@ export class ConfigManager {
     let config;
     try {
       config = JSON.parse(configContent);
-    } catch {
-      // The parser quotes the text around the syntax error, which for this
-      // file could be the token itself: report the position, never the text.
+    } catch (err) {
       throw new Error(
-        `${this.configPath} is not valid JSON${describePosition(configContent)}\n` +
+        `${this.configPath} is not valid JSON${describePosition(configContent, err)}\n` +
         `Expected an object with ${REQUIRED_FIELDS.join(', ')}`
       );
     }
 
-    for (const field of REQUIRED_FIELDS) {
-      if (!config[field]) {
-        throw new Error(`Missing ${field} in ${this.configPath}`);
-      }
-    }
+    this.validate(config, this.configPath);
 
     // The file holds an auth token: keep it readable by its owner only,
     // self-healing configs written by earlier versions.
@@ -146,11 +136,32 @@ export class ConfigManager {
   }
 
   /**
+   * Checks a configuration holds the three fields, as non-empty strings
+   * @param {unknown} config - The parsed configuration
+   * @param {string} source - Where it came from, for the error message
+   * @returns {void}
+   */
+  validate(config, source) {
+    if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+      throw new Error(`${source} does not contain a configuration object`);
+    }
+
+    for (const field of REQUIRED_FIELDS) {
+      const value = config[field];
+      if (typeof value !== 'string' || value.trim() === '') {
+        throw new Error(`${field} is missing or not a string in ${source}`);
+      }
+    }
+  }
+
+  /**
    * Normalizes and caches a configuration
    * @param {object} config - The raw configuration
+   * @param {string} [source=this.configPath] - Where it came from
    * @returns {object} The cached configuration
    */
-  cache(config) {
+  cache(config, source = this.configPath) {
+    this.validate(config, source);
     this.userConfig = { ...config, namespace: this.normalizeNamespace(config.namespace) };
     return this.userConfig;
   }
