@@ -43,7 +43,8 @@ async function main() {
         console.log(`Progress: ${i}/${messageCount} messages sent`);
       }
 
-      if (delayMs > 0) {
+      // No point waiting after the last message
+      if (delayMs > 0 && i < messageCount) {
         await sleep(delayMs);
       }
     }
