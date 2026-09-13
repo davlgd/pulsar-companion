@@ -13,6 +13,24 @@ const ENV_VARS = {
 const REQUIRED_FIELDS = ['serviceUrl', 'token', 'namespace'];
 
 /**
+ * Describes where a file stops being valid JSON, without quoting any of it
+ * @param {string} contents - The file contents
+ * @returns {string} A position suffix, or an empty string
+ */
+function describePosition(contents) {
+  try {
+    JSON.parse(contents);
+  } catch (err) {
+    const position = Number(/position (\d+)/.exec(err.message)?.[1]);
+    if (Number.isInteger(position)) {
+      const line = contents.slice(0, position).split('\n').length;
+      return ` (line ${line})`;
+    }
+  }
+  return '';
+}
+
+/**
  * Manages the user configuration
  * @class
  * @property {string} configPath - The path to the configuration file
@@ -105,10 +123,12 @@ export class ConfigManager {
     let config;
     try {
       config = JSON.parse(configContent);
-    } catch (err) {
+    } catch {
+      // The parser quotes the text around the syntax error, which for this
+      // file could be the token itself: report the position, never the text.
       throw new Error(
-        `${this.configPath} is not valid JSON: ${err.message}\n` +
-        'Fix it, or delete it to be prompted again'
+        `${this.configPath} is not valid JSON${describePosition(configContent)}\n` +
+        `Expected an object with ${REQUIRED_FIELDS.join(', ')}`
       );
     }
 
