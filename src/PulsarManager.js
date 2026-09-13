@@ -117,13 +117,17 @@ export class PulsarManager {
    */
   async cleanup() {
     this.cleanupPromise ??= (async () => {
+      // Each resource is closed independently: a failing producer or consumer
+      // must not keep the client (and its IO threads) from being released.
+      for (const resource of [this.producer, this.consumer]) {
+        try {
+          await resource?.close();
+        } catch (err) {
+          console.error('[Cleanup]', err.message);
+        }
+      }
+
       try {
-        if (this.producer) {
-          await this.producer.close();
-        }
-        if (this.consumer) {
-          await this.consumer.close();
-        }
         if (this.client) {
           await this.client.close();
           console.log('Client closed');
