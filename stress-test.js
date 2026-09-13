@@ -22,6 +22,17 @@ async function main() {
   const argParser = new ArgumentParser(process.argv.slice(2), true);
   const pulsarManager = new PulsarManager(CONFIG, argParser);
 
+  // Close Pulsar resources cleanly when interrupted; a second signal forces exit
+  let interrupted = false;
+  const shutdown = async (signal) => {
+    interrupted = true;
+    console.log(`\nReceived ${signal}, shutting down...`);
+    await pulsarManager.cleanup();
+    process.exit(0);
+  };
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+
   try {
     await argParser.validateArgs();
 
@@ -50,8 +61,12 @@ async function main() {
     }
     console.log('Test completed successfully!');
   } catch (err) {
-    console.error("Error during test:", err.message);
-    process.exitCode = 1;
+    // A send failing because cleanup closed the producer is the interruption
+    // doing its job, not a test failure
+    if (!interrupted) {
+      console.error("Error during test:", err.message);
+      process.exitCode = 1;
+    }
   } finally {
     await pulsarManager.cleanup();
   }
