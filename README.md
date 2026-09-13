@@ -8,6 +8,27 @@ Pulsar Companion is a CLI tool for Apache Pulsar. It allows you to create produc
 npm install -g pulsar-companion
 ```
 
+`pulsar-client` ships a native binding, downloaded by its install script. If
+your npm setup blocks install scripts, the CLI fails at startup with
+`Cannot find module .../pulsar-client/lib/binding/pulsar.node`. The fix is to
+let that package run its install script and reinstall it; its script does two
+things, and both are needed:
+
+```bash
+# from the directory holding the installed package, global or local
+cd "$(npm root -g)/pulsar-companion/node_modules/pulsar-client"   # or ./node_modules/pulsar-client
+npx node-pre-gyp install --fallback-to-build   # the binding
+node GenCertFile.js                            # the CA bundle used by pulsar+ssl://
+```
+
+Skipping the second step is easy to misdiagnose: without the generated CA
+bundle, a `pulsar+ssl://` connection can fail with `AuthenticationError`
+rather than anything mentioning certificates.
+
+The binding uses Node-API, so it is not tied to one major Node.js version on a
+given platform and architecture; the `engines` range and the usual platform
+requirements still apply.
+
 ## Usage
 
 ```bash
@@ -31,18 +52,66 @@ npx pulsar-companion --help
 npx pulsar-companion --version
 ```
 
+Consumers and readers run until interrupted; `Ctrl+C` closes the Pulsar
+resources and exits.
+
+### Consumers and readers
+
+A consumer subscribes, so it acknowledges what it reads and the broker keeps a
+cursor for it. A subscription is created at the latest position, so a brand-new
+subscription shows only messages published from then on; an existing one
+resumes from its own cursor and still receives its backlog.
+
+A reader (`--since`) reads without a durable subscription and without manual
+acknowledgements, so it leaves no cursor behind for you to manage.
+`--since earliest` replays the history the topic still retains — retention may
+already have removed older messages. A timestamp in the future is not an error:
+the reader warns and starts from the latest position instead.
+
+While a timestamped reader is starting up, a message published in that instant
+can be printed before older history, so the first few lines are not guaranteed
+to be in chronological order. The CLI keeps the messages delivered during that
+startup and filters the redeliveries the repositioning causes on a best-effort
+basis, up to 10000 tracked message ids; past that bound a line may repeat.
+
 ## Stress Test
 
-To make some load tests, once this repository is cloned, you can run the following commands:
+To make some load tests, once this repository is cloned, you can run the
+following commands:
 
 ```bash
-npx pulsar-companion-stress
+npm run stress
 npx pulsar-companion-stress --count 1000 --delay 50 --topic "myTopic"
 ```
 
+It publishes real messages to the configured cluster.
+
 ## Configuration
 
-Configuration is stored in `~/.config/pulsar-companion/config.json`. Delete this file to reset.
+Pulsar Companion needs a service URL, an authentication token and a namespace.
+They are read, in order of precedence, from:
+
+1. `--config <path>`, a JSON file holding `serviceUrl`, `token` and `namespace`.
+2. `PULSAR_SERVICE_URL`, `PULSAR_TOKEN` and `PULSAR_NAMESPACE`. All three are
+   required together, so a URL cannot end up paired with another cluster's
+   token. Values read from the environment are never written to disk.
+3. `~/.config/pulsar-companion/config.json`, created interactively on first run
+   and kept readable by its owner only. Delete this file to reset.
+
+```json
+{
+  "serviceUrl": "pulsar+ssl://localhost:6651",
+  "token": "your-token",
+  "namespace": "tenant/namespace"
+}
+```
+
+Without any of these and without a terminal to prompt on — in a pipeline, for
+instance — the CLI exits with a message naming what to set.
+
+Connections over `pulsar+ssl://` verify the broker's certificate *and* that it
+was issued for the host being connected to, so a host that the certificate does
+not cover is refused.
 
 ## Contributing
 
@@ -50,7 +119,10 @@ Configuration is stored in `~/.config/pulsar-companion/config.json`. Delete this
 git clone https://github.com/davlgd/pulsar-companion.git
 cd pulsar-companion
 npm install
+npm test
 ```
+
+`npm test` runs the unit tests, which need neither a network nor a cluster.
 
 ## License
 
