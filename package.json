@@ -14,7 +14,8 @@
   ],
   "scripts": {
     "start": "node index.js",
-    "test": "node stress-test.js"
+    "test": "node --test \"test/*.test.js\"",
+    "stress": "node stress-test.js"
   },
   "keywords": [
     "pulsar",
