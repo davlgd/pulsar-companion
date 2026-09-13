@@ -282,9 +282,9 @@ export class ArgumentParser {
     // A larger delay overflows Node's timer and would be clamped to 1ms.
     this.validateInteger('delay', 0);
 
-    const compression = this.getCompression();
-    if (compression && !CONFIG.validCompressionTypes.includes(compression.toUpperCase())) {
-      throw new Error(`Invalid compression type: ${compression}\nValid types: ${CONFIG.validCompressionTypes.join(', ')}`);
+    const compression = this.getSetting('compression');
+    if (compression && !(compression.toUpperCase() in CONFIG.compressionTypes)) {
+      throw new Error(`Invalid compression type: ${compression}\nValid types: ${Object.keys(CONFIG.compressionTypes).join(', ')}`);
     }
 
     const since = this.getSetting('since');
@@ -320,11 +320,12 @@ export class ArgumentParser {
   }
 
   /**
-   * Returns the compression type in uppercase
-   * @returns {string} The compression type
+   * Returns the compression type as pulsar-client spells it
+   * @returns {string} The canonical compression type
    */
   getCompression() {
-    return (this.getSetting('compression') || CONFIG.defaultCompression).toUpperCase();
+    const requested = (this.getSetting('compression') || CONFIG.defaultCompression).toUpperCase();
+    return CONFIG.compressionTypes[requested] ?? CONFIG.compressionTypes.NONE;
   }
 
   /**

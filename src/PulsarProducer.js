@@ -1,3 +1,12 @@
+import { CONFIG } from './config.js';
+
+/**
+ * Manages the Pulsar producer
+ * @class
+ * @property {Pulsar.Client} client - The Pulsar client instance
+ * @property {object} config - The configuration object
+ * @property {Producer} producer - The Pulsar producer instance
+ */
 export class PulsarProducer {
   /**
    * Creates an instance of PulsarProducer
@@ -13,10 +22,10 @@ export class PulsarProducer {
   /**
    * Creates a producer on the specified topic
    * @param {string} topicName - The full topic name
-   * @param {string} [compression=CONFIG.defaultCompression] - The compression type
+   * @param {string} [compression] - A canonical pulsar-client compression name
    * @returns {Promise<void>}
    */
-  async create(topicName, compression = CONFIG.defaultCompression) {
+  async create(topicName, compression = CONFIG.compressionTypes.NONE) {
     this.producer = await this.client.createProducer({
       batchingEnabled: true,
       sendTimeoutMs: this.config.pulsar.timeouts.sendMessage,
