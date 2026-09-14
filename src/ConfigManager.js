@@ -3,6 +3,13 @@ import { homedir } from 'node:os';
 import { input, password } from '@inquirer/prompts';
 import { open, mkdir } from 'node:fs/promises';
 
+/** Environment variables holding a complete connection, used as a whole */
+const ENV_VARS = {
+  serviceUrl: 'PULSAR_SERVICE_URL',
+  token: 'PULSAR_TOKEN',
+  namespace: 'PULSAR_NAMESPACE'
+};
+
 const REQUIRED_FIELDS = ['serviceUrl', 'token', 'namespace'];
 
 /**
@@ -51,15 +58,18 @@ function describeLocation(contents, err) {
  * @class
  * @property {string} configPath - The path to the configuration file
  * @property {string} configDir - The path to the configuration directory
+ * @property {boolean} explicitPath - Whether the path came from --config
  * @property {object|null} userConfig - The cached user configuration
  * @exports ConfigManager
  */
 export class ConfigManager {
   /**
    * Creates an instance of ConfigManager
+   * @param {string|null} [configPath=null] - An explicit configuration file path
    */
-  constructor() {
-    this.configPath = join(homedir(), '.config', 'pulsar-companion', 'config.json');
+  constructor(configPath = null) {
+    this.explicitPath = Boolean(configPath);
+    this.configPath = configPath ?? join(homedir(), '.config', 'pulsar-companion', 'config.json');
     this.configDir = dirname(this.configPath);
     this.userConfig = null;
   }
@@ -75,12 +85,50 @@ export class ConfigManager {
   }
 
   /**
-   * Loads the user configuration from file
+   * Reads a connection from the environment.
+   * All three variables are required together: mixing them with a file could
+   * pair one cluster's URL with another cluster's token.
+   * @returns {object|null} The configuration, or null when none is set
+   */
+  fromEnvironment() {
+    // Presence, not truthiness: a variable set to an empty string has been
+    // set, so it must be rejected as invalid rather than silently ignored,
+    // which would fall back to a file naming a different cluster.
+    const present = Object.entries(ENV_VARS).filter(([, name]) => process.env[name] !== undefined);
+    if (present.length === 0) return null;
+
+    if (present.length !== REQUIRED_FIELDS.length) {
+      const missing = Object.entries(ENV_VARS)
+        .filter(([, name]) => process.env[name] === undefined)
+        .map(([, name]) => name);
+      throw new Error(
+        `Incomplete configuration in the environment: ${missing.join(', ')} not set\n` +
+        `Set ${Object.values(ENV_VARS).join(', ')} together, or unset them all to use a configuration file`
+      );
+    }
+
+    return Object.fromEntries(
+      Object.entries(ENV_VARS).map(([field, name]) => [field, process.env[name]])
+    );
+  }
+
+  /**
+   * Loads the user configuration from the environment or the config file
    * @returns {Promise<object>} The configuration object
    */
   async loadUserConfig() {
     if (this.userConfig) {
       return this.userConfig;
+    }
+
+    // Precedence is --config, then the environment, then the default file.
+    // An explicitly chosen file is never overridden, and its presence also
+    // means an incomplete environment is none of our business.
+    if (!this.explicitPath) {
+      const fromEnv = this.fromEnvironment();
+      if (fromEnv) {
+        return this.cache(fromEnv, 'the environment');
+      }
     }
 
     let configContent;
@@ -93,6 +141,11 @@ export class ConfigManager {
       configContent = await handle.readFile('utf8');
     } catch (err) {
       if (err.code === 'ENOENT') {
+        // An explicitly requested file that does not exist is a mistake,
+        // not an invitation to start the setup prompts.
+        if (this.explicitPath) {
+          throw new Error(`Configuration file not found: ${this.configPath}`);
+        }
         return await this.createUserConfig();
       }
       throw new Error(`Cannot read ${this.configPath}: ${err.message}`);
@@ -152,6 +205,15 @@ export class ConfigManager {
    * @returns {Promise<object>} The newly created configuration object
    */
   async createUserConfig() {
+    // Prompting only makes sense on a terminal: in a pipe or a CI job the
+    // prompt cannot be answered and would fail with a confusing message.
+    if (!process.stdin.isTTY) {
+      throw new Error(
+        `No configuration found at ${this.configPath} and no terminal to ask on\n` +
+        `Set ${Object.values(ENV_VARS).join(', ')}, or pass --config <path>`
+      );
+    }
+
     console.log('No configuration file found. Please provide your Pulsar connection details:');
 
     const serviceUrl = await input({
@@ -214,8 +276,6 @@ export class ConfigManager {
     }
 
     try {
-      // The create mode is masked by umask, which can only remove bits, so an
-      // unusual one would leave a file its owner cannot rewrite.
       await handle.chmod(0o600);
       await handle.writeFile(JSON.stringify(config, null, 2));
     } finally {
