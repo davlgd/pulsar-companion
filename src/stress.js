@@ -44,14 +44,32 @@ export async function sendMessages(argParser, pulsarManager, { pause = sleep } =
  * @param {PulsarManager} pulsarManager - The manager to publish through
  * @param {object} [options] - Injection points
  * @param {Function} [options.pause=sleep] - Waits between messages
- * @returns {Promise<void>}
+ * @param {Function} [options.onInterrupt] - Registers the shutdown handler
+ * @returns {Promise<number>} The exit code to report
  */
-export async function runStressTest(argParser, pulsarManager, { pause = sleep } = {}) {
+export async function runStressTest(argParser, pulsarManager, { pause = sleep, onInterrupt } = {}) {
+  // Close Pulsar resources cleanly when interrupted; a second signal forces exit
+  let interrupted = false;
+  onInterrupt?.(async (signal) => {
+    interrupted = true;
+    console.log(`\nReceived ${signal}, shutting down...`);
+    await pulsarManager.cleanup();
+    process.exit(0);
+  });
+
+  let exitCode = 0;
   try {
     await argParser.validateArgs();
     await sendMessages(argParser, pulsarManager, { pause });
   } catch (err) {
-    console.error("Error during test:", err.message);
-    process.exit(1);
+    // A send failing because cleanup closed the producer is the interruption
+    // doing its job, not a test failure
+    if (!interrupted) {
+      console.error("Error during test:", err.message);
+      exitCode = 1;
+    }
+  } finally {
+    await pulsarManager.cleanup();
   }
+  return exitCode;
 }
