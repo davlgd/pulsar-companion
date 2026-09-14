@@ -3,6 +3,18 @@ import { CONFIG } from './config.js';
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
+ * Reads an already-validated integer argument, or its default when absent
+ * @param {ArgumentParser} argParser - The argument parser instance
+ * @param {string} param - The parameter name
+ * @param {number} fallback - The default to use when the argument is absent
+ * @returns {number} The integer value
+ */
+const intArg = (argParser, param, fallback) => {
+  const raw = argParser.getSetting(param);
+  return raw === null || raw === undefined ? fallback : Number(raw);
+};
+
+/**
  * Publishes the requested messages
  * @param {ArgumentParser} argParser - The validated argument parser
  * @param {PulsarManager} pulsarManager - The manager to publish through
@@ -12,13 +24,13 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 export async function sendMessages(argParser, pulsarManager, { pause = sleep } = {}) {
   const topic = argParser.getSetting('topic') || CONFIG.defaultTopic;
-  const messageCount = parseInt(argParser.getValue('count')) || CONFIG.stress.defaultCount;
-  const delayMs = parseInt(argParser.getValue('delay')) || CONFIG.stress.defaultDelay;
+  const messageCount = intArg(argParser, 'count', CONFIG.stress.defaultCount);
+  const delayMs = intArg(argParser, 'delay', CONFIG.stress.defaultDelay);
 
   console.log(`Starting to send ${messageCount} messages to topic ${topic}`);
   console.log(`Delay between messages: ${delayMs}ms`);
 
-  await pulsarManager.connect();
+  await pulsarManager.connect(argParser.getThreads());
   await pulsarManager.createProducer(argParser.getCompression());
 
   for (let i = 1; i <= messageCount; i++) {
@@ -29,7 +41,8 @@ export async function sendMessages(argParser, pulsarManager, { pause = sleep } =
       console.log(`Progress: ${i}/${messageCount} messages sent`);
     }
 
-    if (delayMs > 0) {
+    // No point waiting after the last message
+    if (delayMs > 0 && i < messageCount) {
       await pause(delayMs);
     }
   }
