@@ -8,4 +8,9 @@ import { runStressTest } from './src/stress.js';
 const argParser = new ArgumentParser(process.argv.slice(2), true);
 const pulsarManager = new PulsarManager(CONFIG, argParser);
 
-await runStressTest(argParser, pulsarManager);
+process.exitCode = await runStressTest(argParser, pulsarManager, {
+  onInterrupt: (shutdown) => {
+    process.once('SIGINT', () => shutdown('SIGINT'));
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+  }
+});
