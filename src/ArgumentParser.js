@@ -35,15 +35,15 @@ const MODES = {
   },
   CONSUMER: {
     required: [],
-    optional: ['sub', 'topic', 'type']
+    optional: ['sub', 'threads', 'topic', 'type']
   },
   READER: {
     required: ['since'],
-    optional: ['topic']
+    optional: ['threads', 'topic']
   },
   STRESS: {
     required: [],
-    optional: ['compression', 'count', 'delay', 'topic']
+    optional: ['compression', 'count', 'delay', 'threads', 'topic']
   }
 };
 
