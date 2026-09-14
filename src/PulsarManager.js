@@ -69,8 +69,18 @@ export class PulsarManager {
       ioThreads
     };
 
-    this.client = new Pulsar.Client(clientConfig);
+    this.client = this.createClient(clientConfig);
     console.log('Attempting to connect to Pulsar broker...');
+  }
+
+  /**
+   * Builds the Pulsar client. A seam, so the options this sends — the TLS
+   * hostname check in particular — can be asserted without a broker.
+   * @param {object} clientConfig - The client options
+   * @returns {Pulsar.Client} The client
+   */
+  createClient(clientConfig) {
+    return new Pulsar.Client(clientConfig);
   }
 
   /**
