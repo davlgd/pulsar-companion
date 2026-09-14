@@ -8,6 +8,7 @@ import { CONFIG } from './config.js';
  */
 const OPTIONS = {
   compression: { type: 'string', short: 'c' },
+  config: { type: 'string' },
   count: { type: 'string' },
   delay: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
@@ -23,7 +24,7 @@ const OPTIONS = {
 
 // Options that name something are meaningless when empty. --send and --key
 // carry data instead, so an empty value there is legitimate and kept.
-const REQUIRE_VALUE = ['compression', 'since', 'sub', 'topic', 'type'];
+const REQUIRE_VALUE = ['compression', 'config', 'since', 'sub', 'topic', 'type'];
 
 /** Positional arguments map to these, in order */
 const POSITIONAL_SLOTS = ['topic', 'sub', 'key'];
@@ -200,7 +201,7 @@ export class ArgumentParser {
       }
     }
 
-    const allowedParams = [...mode.required, ...mode.optional, 'help', 'version'];
+    const allowedParams = [...mode.required, ...mode.optional, 'config', 'help', 'version'];
     for (const param of Object.keys(this.values)) {
       if (!allowedParams.includes(param)) {
         throw new Error(`Parameter --${param} cannot be used in ${this.mode} mode`);
@@ -222,7 +223,9 @@ export class ArgumentParser {
       throw new Error(`Positional ${lastSlot} needs a value, or use --${lastSlot}`);
     }
 
-    // Reject an empty flag before anything reads configuration or connects.
+    // Reject an empty flag before anything reads configuration or connects: an
+    // empty --config would otherwise look like no --config at all, and fall
+    // back to the environment instead of failing.
     for (const param of REQUIRE_VALUE) {
       const value = this.values[param];
       if (value !== undefined && value.trim() === '') {
@@ -301,6 +304,14 @@ export class ArgumentParser {
     if (requestedType && !CONFIG.validTypes.includes(requestedType)) {
       throw new Error(`Invalid subscription type: ${requestedType}\nValid types: ${CONFIG.validTypes.join(', ')}`);
     }
+  }
+
+  /**
+   * Returns the explicit configuration file path, if any
+   * @returns {string|null} The path or null
+   */
+  getConfigPath() {
+    return this.getSetting('config');
   }
 
   /**

@@ -47,6 +47,7 @@ must carry a value unless its flag supplies it, except the key, which is data.
 
 Common Options:
   --topic <name>            Specify topic name (default: pulsar_companion)
+  --config <path>           Use this configuration file instead of the default
   -t, --threads <n>         Number of IO threads (default: 1)
   -h, --help                Show this help message
   -v, --version             Show version
@@ -64,6 +65,12 @@ Consumer Options:
   --since <value>           Read messages without subscription from a position
                               Values: earliest, latest
                               Or ISO 8601 timestamp (e.g., "2024-01-20T10:00:00Z")
+
+Configuration:
+  An explicit --config <path> takes precedence. Otherwise PULSAR_SERVICE_URL,
+  PULSAR_TOKEN and PULSAR_NAMESPACE, when all three are set, override
+  ~/.config/pulsar-companion/config.json. The initial setup prompts need a
+  terminal; without one, the CLI reports what to set instead.
 
 Examples:
   # Producer examples
@@ -88,6 +95,7 @@ Options:
   --topic <name>            Specify topic name (default: pulsar_companion)
   --count <number>          Number of messages to send (default: 100)
   --delay <ms>              Delay between messages in ms (default: 10)
+  --config <path>           Use this configuration file instead of the default
   -c, --compression <type>  Compression type (default: NONE)
                               Valid types: NONE, LZ4, ZLIB, ZSTD, SNAPPY
   -t, --threads <n>         Number of IO threads (default: 1)
